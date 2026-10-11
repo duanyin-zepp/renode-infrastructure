@@ -87,7 +87,8 @@ namespace Antmicro.Renode.Peripherals.CPU
             cpu.InstallCustomInstruction("-----------------101-----1011011", HandleBEQC, "BEQC");
             cpu.InstallCustomInstruction("-0---------------111-----1011011", HandleBBC, "BBC");
             cpu.InstallCustomInstruction("-1---------------111-----1011011", HandleBBS, "BBS");
-            cpu.InstallCustomInstruction("0-----0----------01------1011011", HandleBFOZ, "BFOZ");
+            cpu.InstallCustomInstruction("0-----0----------010-----1011011", HandleBFOZ, "BFOZ");
+            cpu.InstallCustomInstruction("0-----0----------011-----1011011", HandleBFOZ, "BFOS");
             // Andes' legacy PKBB16 encoding uses opcode 0x7f, which the base
             // RISC-V length decoder interprets as a 96-bit instruction.
             cpu.InstallCustomInstruction("-------------------------1111111", HandlePKBB16, "PKBB16");
@@ -203,6 +204,10 @@ namespace Antmicro.Renode.Peripherals.CPU
                 var length = msb - lsb + 1;
                 var mask = (1u << length) - 1;
                 result = (source >> lsb) & mask;
+                if((opcode & 0x1000) != 0 && length < 32)
+                {
+                    result = unchecked((uint)((int)(result << (32 - length)) >> (32 - length)));
+                }
             }
 
             cpu.SetRegister(rd, result);
