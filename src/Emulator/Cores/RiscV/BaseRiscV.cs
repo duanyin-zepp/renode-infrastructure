@@ -745,7 +745,7 @@ namespace Antmicro.Renode.Peripherals.CPU
             }
             else if(bitLength == 32 && (
                 ((pattern & 0b11) != 0b11) ||
-                ((pattern & 0b11100) == 0b11100))
+                (((pattern & 0b11100) == 0b11100) && ((pattern & 0b1111111) != 0b1111111)))
             )
             {
                 ReportInvalidCustomInstructionFormat(pattern, bitLength, "BBB11".PadLeft(bitLength, 'x') + ", BBB != 111");

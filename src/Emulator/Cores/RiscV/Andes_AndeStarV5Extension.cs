@@ -36,6 +36,10 @@ namespace Antmicro.Renode.Peripherals.CPU
             // MHS003S boot code writes zero to this Andes stack-safety control CSR.
             // The feature is not modeled, so accept the write and report it as disabled.
             cpu.RegisterCSR((ushort)0x7c6, () => 0x0, value => { });
+            // MHS003S exception entry reads MSP_BOUND while saving the machine
+            // context. Stack bounds are not modeled, so expose the disabled
+            // value and accept writes just like the adjacent stack-safety CSR.
+            cpu.RegisterCSR((ushort)0x7c7, () => 0x0, value => { });
             cpu.RegisterCSR((ushort)CustomCSR.MachineCacheControl, () => 0xffffffff, value => { cpu.Log(LogLevel.Warning, "Writing to the Machine Cache Control CSR (0x7ca) is currently not supported"); });
             cpu.RegisterCSR((ushort)CustomCSR.InstructionCacheAndMemoryConfiguration, () => 0x0, value => { cpu.Log(LogLevel.Warning, "Writing to the Machine Custom read-only CSR (0xfc0) is not supported"); });
             cpu.RegisterCSR((ushort)CustomCSR.DataCacheAndMemoryConfiguration, () => 0x0, value => { cpu.Log(LogLevel.Warning, "Writing to the Machine Custom read-only CSR (0xfc1) is not supported"); });
@@ -82,7 +86,10 @@ namespace Antmicro.Renode.Peripherals.CPU
             cpu.InstallCustomInstruction("-----------------110-----1011011", HandleBNEC, "BNEC");
             cpu.InstallCustomInstruction("-----------------101-----1011011", HandleBEQC, "BEQC");
             cpu.InstallCustomInstruction("-----------------111-----1011011", HandleBBC, "BBC");
-            cpu.InstallCustomInstruction("0-----0----------010-----1011011", HandleBFOZ, "BFOZ");
+            cpu.InstallCustomInstruction("0-----0----------01------1011011", HandleBFOZ, "BFOZ");
+            // Andes' legacy PKBB16 encoding uses opcode 0x7f, which the base
+            // RISC-V length decoder interprets as a 96-bit instruction.
+            cpu.InstallCustomInstruction("-------------------------1111111", HandlePKBB16, "PKBB16");
 
             // Custom0
             cpu.InstallCustomInstruction("iiiiiiiiiiiiiiiiii00ddddd0001011", opc => ReadFromMemoryToRegister(opc, AccessWidth.Byte, LoadExtractorByte), "LBGP");
@@ -187,6 +194,16 @@ namespace Antmicro.Renode.Peripherals.CPU
             }
 
             cpu.SetRegister(rd, result);
+        }
+
+        private void HandlePKBB16(ulong opcode)
+        {
+            var rd = (int)BitHelper.GetValue(opcode, 7, 5);
+            var rs1 = (int)BitHelper.GetValue(opcode, 15, 5);
+            var rs2 = (int)BitHelper.GetValue(opcode, 20, 5);
+            var lowerHalf = (uint)cpu.GetRegister(rs2).RawValue & 0xFFFF;
+            var upperHalf = ((uint)cpu.GetRegister(rs1).RawValue & 0xFFFF) << 16;
+            cpu.SetRegister(rd, upperHalf | lowerHalf);
         }
 
         private void ReadFromMemoryToRegister(ulong opcode, AccessWidth width, Func<ulong, ulong> extractor, int immediateBits = 18, bool extendSign = true)
