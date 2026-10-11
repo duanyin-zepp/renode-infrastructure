@@ -33,6 +33,9 @@ namespace Antmicro.Renode.Peripherals.CPU
 
             // stub CSRs to make software happy
             cpu.RegisterCSR((ushort)CustomCSR.MachineExtendedStatus, () => 0x0, value => { cpu.Log(LogLevel.Warning, "Writing to the Machine Extended Status CSR (0x7c4) is currently not supported"); });
+            // MHS003S boot code writes zero to this Andes stack-safety control CSR.
+            // The feature is not modeled, so accept the write and report it as disabled.
+            cpu.RegisterCSR((ushort)0x7c6, () => 0x0, value => { });
             cpu.RegisterCSR((ushort)CustomCSR.MachineCacheControl, () => 0xffffffff, value => { cpu.Log(LogLevel.Warning, "Writing to the Machine Cache Control CSR (0x7ca) is currently not supported"); });
             cpu.RegisterCSR((ushort)CustomCSR.InstructionCacheAndMemoryConfiguration, () => 0x0, value => { cpu.Log(LogLevel.Warning, "Writing to the Machine Custom read-only CSR (0xfc0) is not supported"); });
             cpu.RegisterCSR((ushort)CustomCSR.DataCacheAndMemoryConfiguration, () => 0x0, value => { cpu.Log(LogLevel.Warning, "Writing to the Machine Custom read-only CSR (0xfc1) is not supported"); });
@@ -72,6 +75,11 @@ namespace Antmicro.Renode.Peripherals.CPU
             cpu.RegisterCSRStub((ushort)CustomCSR.PMAAddress14, "PMAADDR14");
             cpu.RegisterCSRStub((ushort)CustomCSR.PMAAddress15, "PMAADDR15");
 
+            // Andes address generation: base + index scaled by element size.
+            cpu.InstallCustomInstruction("0000101sssssiiiii000ddddd1011011", opc => HandleLEA(opc, 1), "LEA.H");
+            cpu.InstallCustomInstruction("0000111sssssiiiii000ddddd1011011", opc => HandleLEA(opc, 3), "LEA.D");
+            cpu.InstallCustomInstruction("-----------------110-----1011011", HandleBNEC, "BNEC");
+
             // Custom0
             cpu.InstallCustomInstruction("iiiiiiiiiiiiiiiiii00ddddd0001011", opc => ReadFromMemoryToRegister(opc, AccessWidth.Byte, LoadExtractorByte), "LBGP");
             cpu.InstallCustomInstruction("iiiiiiiiiiiiiiiiii10ddddd0001011", opc => ReadFromMemoryToRegister(opc, AccessWidth.Byte, LoadExtractorByte, extendSign: false), "LBUGP");
@@ -84,6 +92,34 @@ namespace Antmicro.Renode.Peripherals.CPU
             cpu.InstallCustomInstruction("iiiiiiisssssiiiii100iiiii0101011", opc => WriteRegisterToMemory(opc, AccessWidth.Word, StoreExtractorWord), "SHGP");
             cpu.InstallCustomInstruction("iiiiiiiiiiiiiiiii010ddddd0101011", opc => ReadFromMemoryToRegister(opc, AccessWidth.DoubleWord, LoadExtractorDoubleWord), "LWGP");
             cpu.InstallCustomInstruction("iiiiiiisssssiiiii100iiiii0101011", opc => WriteRegisterToMemory(opc, AccessWidth.DoubleWord, StoreExtractorDoubleWord, 19), "SWGP");
+        }
+
+        private void HandleLEA(ulong opcode, int scaleShift)
+        {
+            var rd = (int)BitHelper.GetValue(opcode, 7, 5);
+            var rs1 = (int)BitHelper.GetValue(opcode, 15, 5);
+            var rs2 = (int)BitHelper.GetValue(opcode, 20, 5);
+            var baseAddress = cpu.GetRegister(rs1).RawValue;
+            var index = cpu.GetRegister(rs2).RawValue;
+            cpu.SetRegister(rd, unchecked((uint)(baseAddress + (index << scaleShift))));
+        }
+
+        private void HandleBNEC(ulong opcode)
+        {
+            var rs1 = (int)BitHelper.GetValue(opcode, 15, 5);
+            var constant = (uint)(BitHelper.GetValue(opcode, 20, 5)
+                | (BitHelper.GetValue(opcode, 7, 1) << 5)
+                | (BitHelper.GetValue(opcode, 30, 1) << 6));
+            if((uint)cpu.GetRegister(rs1).RawValue == constant)
+            {
+                return;
+            }
+
+            var encodedOffset = (uint)((BitHelper.GetValue(opcode, 31, 1) << 10)
+                | (BitHelper.GetValue(opcode, 25, 5) << 5)
+                | BitHelper.GetValue(opcode, 8, 4));
+            var offset = (int)BitHelper.SignExtend(encodedOffset, 11) << 1;
+            cpu.PC = unchecked((uint)(cpu.PC.RawValue + (ulong)(long)offset));
         }
 
         private void ReadFromMemoryToRegister(ulong opcode, AccessWidth width, Func<ulong, ulong> extractor, int immediateBits = 18, bool extendSign = true)
