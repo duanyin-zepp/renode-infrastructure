@@ -44,6 +44,10 @@ namespace Antmicro.Renode.Extensions.Utilities.GDB.Commands
                 .FirstOrDefault();
             if(selectedFreeRTOSThreadId != 0)
             {
+                // `info threads` queries every thread's registers and leaves
+                // the last queried thread selected in the remote stub. A
+                // vCont action names the thread GDB actually intends to
+                // resume, so restore that task's register context first.
                 manager.SelectedFreeRTOSThreadId = selectedFreeRTOSThreadId;
             }
 

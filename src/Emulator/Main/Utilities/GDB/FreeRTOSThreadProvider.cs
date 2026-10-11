@@ -7,6 +7,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 using Antmicro.Renode.Peripherals;
@@ -64,9 +65,10 @@ namespace Antmicro.Renode.Utilities.GDB
             }
 
             var result = tasksByTcb.Values.OrderBy(x => x.TCBAddress).ToList();
-            for(var i = 0; i < result.Count; i++)
+            var threadIds = threadIdsByManager.GetValue(manager, _ => new ThreadIdRegistry());
+            foreach(var task in result)
             {
-                result[i].ThreadId = CreateThreadId(result[i], i);
+                task.ThreadId = threadIds.GetOrCreate(task.TCBAddress);
             }
             return result;
         }
@@ -237,14 +239,20 @@ namespace Antmicro.Renode.Utilities.GDB
             tasksByTcb.Add(task.TCBAddress, task);
         }
 
-        private static uint CreateThreadId(FreeRTOSTaskInfo task, int index)
+        private sealed class ThreadIdRegistry
         {
-            if(task.TCBAddress <= MaxSignedGdbThreadId)
+            public uint GetOrCreate(uint tcbAddress)
             {
-                return task.TCBAddress;
+                if(!idsByTcb.TryGetValue(tcbAddress, out var threadId))
+                {
+                    threadId = nextId++;
+                    idsByTcb.Add(tcbAddress, threadId);
+                }
+                return threadId;
             }
 
-            return GeneratedThreadIdBase + (uint)index + 1;
+            private readonly Dictionary<uint, uint> idsByTcb = new Dictionary<uint, uint>();
+            private uint nextId = GeneratedThreadIdBase + 1;
         }
 
         private static string ReadTaskName(CommandsManager manager, uint tcbAddress)
@@ -361,7 +369,6 @@ namespace Antmicro.Renode.Utilities.GDB
         private const string TopUsedPrioritySymbol = "uxTopUsedPriority";
 
         private const uint GeneratedThreadIdBase = 0x10000;
-        private const uint MaxSignedGdbThreadId = 0x7fffffff;
 
         private const uint ListNumberOfItemsOffset = 0;
         private const uint ListEndOffset = 8;
@@ -401,6 +408,9 @@ namespace Antmicro.Renode.Utilities.GDB
             "pxDelayedTaskList",
             "pxOverflowDelayedTaskList",
         };
+
+        private static readonly ConditionalWeakTable<CommandsManager, ThreadIdRegistry> threadIdsByManager
+            = new ConditionalWeakTable<CommandsManager, ThreadIdRegistry>();
     }
 
     internal class FreeRTOSTaskInfo
