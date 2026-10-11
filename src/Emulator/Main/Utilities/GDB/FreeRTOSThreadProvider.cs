@@ -129,9 +129,10 @@ namespace Antmicro.Renode.Utilities.GDB
                 return false;
             }
 
-            // pxPortInitialiseStack leaves the saved x2 slot zero because the
-            // restore routine advances SP past the whole context frame instead.
-            if(registerNumber == StackPointerRegisterNumber && registerValue == 0)
+            // The RISC-V port decrements SP before saving x2, so the saved x2
+            // slot contains the context-frame base. The restore code advances
+            // SP past the whole frame before returning to the task.
+            if(registerNumber == StackPointerRegisterNumber)
             {
                 registerValue = savedStackPointer + ContextSizeBytes;
             }
@@ -369,8 +370,10 @@ namespace Antmicro.Renode.Utilities.GDB
         private const uint ListSize = 20;
 
         private const uint WordSize = 4;
-        private const uint ContextSizeBytes = 72 * WordSize;
-        private const uint SavedMepcWord = 65;
+        // The Dublin boot ELF's Andes RISC-V port saves 32 integer registers,
+        // four control words, 32 double-width FP registers and two reserved words.
+        private const uint ContextSizeBytes = 408;
+        private const uint SavedMepcWord = 33;
         private const int StackPointerRegisterNumber = 2;
         private const int ProgramCounterRegisterNumber = 32;
 
