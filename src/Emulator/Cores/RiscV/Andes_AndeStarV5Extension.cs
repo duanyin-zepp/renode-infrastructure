@@ -77,10 +77,12 @@ namespace Antmicro.Renode.Peripherals.CPU
 
             // Andes address generation: base + index scaled by element size.
             cpu.InstallCustomInstruction("0000101sssssiiiii000ddddd1011011", opc => HandleLEA(opc, 1), "LEA.H");
+            cpu.InstallCustomInstruction("0000110sssssiiiii000ddddd1011011", opc => HandleLEA(opc, 2), "LEA.W");
             cpu.InstallCustomInstruction("0000111sssssiiiii000ddddd1011011", opc => HandleLEA(opc, 3), "LEA.D");
             cpu.InstallCustomInstruction("-----------------110-----1011011", HandleBNEC, "BNEC");
             cpu.InstallCustomInstruction("-----------------101-----1011011", HandleBEQC, "BEQC");
             cpu.InstallCustomInstruction("-----------------111-----1011011", HandleBBC, "BBC");
+            cpu.InstallCustomInstruction("0-----0----------010-----1011011", HandleBFOZ, "BFOZ");
 
             // Custom0
             cpu.InstallCustomInstruction("iiiiiiiiiiiiiiiiii00ddddd0001011", opc => ReadFromMemoryToRegister(opc, AccessWidth.Byte, LoadExtractorByte), "LBGP");
@@ -117,10 +119,10 @@ namespace Antmicro.Renode.Peripherals.CPU
                 return;
             }
 
-            var encodedOffset = (uint)((BitHelper.GetValue(opcode, 31, 1) << 10)
-                | (BitHelper.GetValue(opcode, 25, 5) << 5)
+            var encodedOffset = (uint)((BitHelper.GetValue(opcode, 31, 1) << 9)
+                | (BitHelper.GetValue(opcode, 25, 5) << 4)
                 | BitHelper.GetValue(opcode, 8, 4));
-            var offset = (int)BitHelper.SignExtend(encodedOffset, 11) << 1;
+            var offset = (int)BitHelper.SignExtend(encodedOffset, 10) << 1;
             cpu.PC = unchecked((uint)(cpu.PC.RawValue + (ulong)(long)offset));
         }
 
@@ -135,10 +137,10 @@ namespace Antmicro.Renode.Peripherals.CPU
                 return;
             }
 
-            var encodedOffset = (uint)((BitHelper.GetValue(opcode, 31, 1) << 10)
-                | (BitHelper.GetValue(opcode, 25, 5) << 5)
+            var encodedOffset = (uint)((BitHelper.GetValue(opcode, 31, 1) << 9)
+                | (BitHelper.GetValue(opcode, 25, 5) << 4)
                 | BitHelper.GetValue(opcode, 8, 4));
-            var offset = (int)BitHelper.SignExtend(encodedOffset, 11) << 1;
+            var offset = (int)BitHelper.SignExtend(encodedOffset, 10) << 1;
             cpu.PC = unchecked((uint)(cpu.PC.RawValue + (ulong)(long)offset));
         }
 
@@ -151,11 +153,40 @@ namespace Antmicro.Renode.Peripherals.CPU
                 return;
             }
 
-            var encodedOffset = (uint)((BitHelper.GetValue(opcode, 31, 1) << 10)
-                | (BitHelper.GetValue(opcode, 25, 5) << 5)
+            var encodedOffset = (uint)((BitHelper.GetValue(opcode, 31, 1) << 9)
+                | (BitHelper.GetValue(opcode, 25, 5) << 4)
                 | BitHelper.GetValue(opcode, 8, 4));
-            var offset = (int)BitHelper.SignExtend(encodedOffset, 11) << 1;
+            var offset = (int)BitHelper.SignExtend(encodedOffset, 10) << 1;
             cpu.PC = unchecked((uint)(cpu.PC.RawValue + (ulong)(long)offset));
+        }
+
+        private void HandleBFOZ(ulong opcode)
+        {
+            var rd = (int)BitHelper.GetValue(opcode, 7, 5);
+            var rs1 = (int)BitHelper.GetValue(opcode, 15, 5);
+            var msb = (int)BitHelper.GetValue(opcode, 26, 5);
+            var lsb = (int)BitHelper.GetValue(opcode, 20, 5);
+            var source = (uint)cpu.GetRegister(rs1).RawValue;
+            uint result;
+
+            if(msb == 0)
+            {
+                result = (source & 1) << lsb;
+            }
+            else if(msb < lsb)
+            {
+                var length = lsb - msb + 1;
+                var mask = (1u << length) - 1;
+                result = (source & mask) << msb;
+            }
+            else
+            {
+                var length = msb - lsb + 1;
+                var mask = (1u << length) - 1;
+                result = (source >> lsb) & mask;
+            }
+
+            cpu.SetRegister(rd, result);
         }
 
         private void ReadFromMemoryToRegister(ulong opcode, AccessWidth width, Func<ulong, ulong> extractor, int immediateBits = 18, bool extendSign = true)
