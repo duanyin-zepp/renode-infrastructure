@@ -80,6 +80,7 @@ namespace Antmicro.Renode.Peripherals.CPU
             cpu.InstallCustomInstruction("0000111sssssiiiii000ddddd1011011", opc => HandleLEA(opc, 3), "LEA.D");
             cpu.InstallCustomInstruction("-----------------110-----1011011", HandleBNEC, "BNEC");
             cpu.InstallCustomInstruction("-----------------101-----1011011", HandleBEQC, "BEQC");
+            cpu.InstallCustomInstruction("-----------------111-----1011011", HandleBBC, "BBC");
 
             // Custom0
             cpu.InstallCustomInstruction("iiiiiiiiiiiiiiiiii00ddddd0001011", opc => ReadFromMemoryToRegister(opc, AccessWidth.Byte, LoadExtractorByte), "LBGP");
@@ -130,6 +131,22 @@ namespace Antmicro.Renode.Peripherals.CPU
                 | (BitHelper.GetValue(opcode, 7, 1) << 5)
                 | (BitHelper.GetValue(opcode, 30, 1) << 6));
             if((uint)cpu.GetRegister(rs1).RawValue != constant)
+            {
+                return;
+            }
+
+            var encodedOffset = (uint)((BitHelper.GetValue(opcode, 31, 1) << 10)
+                | (BitHelper.GetValue(opcode, 25, 5) << 5)
+                | BitHelper.GetValue(opcode, 8, 4));
+            var offset = (int)BitHelper.SignExtend(encodedOffset, 11) << 1;
+            cpu.PC = unchecked((uint)(cpu.PC.RawValue + (ulong)(long)offset));
+        }
+
+        private void HandleBBC(ulong opcode)
+        {
+            var rs1 = (int)BitHelper.GetValue(opcode, 15, 5);
+            var bit = (int)BitHelper.GetValue(opcode, 20, 5);
+            if((((uint)cpu.GetRegister(rs1).RawValue >> bit) & 1) != 0)
             {
                 return;
             }
