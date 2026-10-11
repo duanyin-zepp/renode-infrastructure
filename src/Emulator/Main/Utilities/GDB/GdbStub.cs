@@ -284,7 +284,7 @@ namespace Antmicro.Renode.Utilities.GDB
                         }
                         else
                         {
-                            ctx.Send(new Packet(PacketData.StopReply(args.BreakpointType.Value, args.Address)));
+                            ctx.Send(new Packet(PacketData.StopReply(args.BreakpointType.Value, GetCurrentThreadId(cpuSupportingGdb), args.Address)));
                         }
                         break;
                     }
@@ -331,7 +331,7 @@ namespace Antmicro.Renode.Utilities.GDB
                     }
                     else
                     {
-                        ctx.Send(new Packet(PacketData.StopReply(InterruptSignal)));
+                        ctx.Send(new Packet(PacketData.StopReply(InterruptSignal, GetCurrentThreadId(cpuSupportingGdb))));
                     }
                     return;
                 case HaltReason.Step:
@@ -342,7 +342,7 @@ namespace Antmicro.Renode.Utilities.GDB
                     }
                     else
                     {
-                        ctx.Send(new Packet(PacketData.StopReply(TrapSignal)));
+                        ctx.Send(new Packet(PacketData.StopReply(TrapSignal, GetCurrentThreadId(cpuSupportingGdb))));
                     }
                     return;
                 case HaltReason.Abort:
@@ -352,6 +352,16 @@ namespace Antmicro.Renode.Utilities.GDB
                     throw new ArgumentException("Unexpected halt reason");
                 }
             }
+        }
+
+        private uint GetCurrentThreadId(ICpuSupportingGdb cpu)
+        {
+            if(FreeRTOSThreadProvider.TryGetCurrentThreadId(commandsManager, out var freeRtosThreadId))
+            {
+                return freeRtosThreadId;
+            }
+
+            return commandsManager.ManagedCpus[cpu];
         }
 
         private void OnConnectionAccepted()
