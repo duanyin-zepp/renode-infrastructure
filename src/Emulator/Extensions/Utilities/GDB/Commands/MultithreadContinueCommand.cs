@@ -6,6 +6,7 @@
 //
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 
@@ -35,6 +36,15 @@ namespace Antmicro.Renode.Extensions.Utilities.GDB.Commands
             if(!TryParseData(data, out var operations))
             {
                 return PacketData.ErrorReply();
+            }
+
+            var selectedFreeRTOSThreadId = operations
+                .Where(operation => operation.FreeRTOSThreadId.HasValue)
+                .Select(operation => operation.FreeRTOSThreadId.Value)
+                .FirstOrDefault();
+            if(selectedFreeRTOSThreadId != 0)
+            {
+                manager.SelectedFreeRTOSThreadId = selectedFreeRTOSThreadId;
             }
 
             if(EmulationManager.Instance.CurrentEmulation.SingleStepBlocking)
@@ -177,10 +187,21 @@ namespace Antmicro.Renode.Extensions.Utilities.GDB.Commands
             {
                 // No id means that command should be applied to the rest of the threads
                 var threadId = new PacketThreadId(null, PacketThreadId.All);
+                uint? freeRtosThreadId = null;
                 var operation = pair.Split(':');
                 if(pair.Length > 1)
                 {
                     threadId = new PacketThreadId(operation[1]);
+                    // FreeRTOS task IDs are exposed to GDB as threads, but all
+                    // tasks execute on the same emulated CPU. GDB uses the
+                    // selected task ID in vCont packets (e.g. s:10001), so
+                    // translate it to that CPU before validating the request.
+                    if(!threadId.ProcessId.HasValue && threadId.ThreadId > 0
+                        && FreeRTOSThreadProvider.TryGetTaskByThreadId(manager, threadId.ThreadId, out _))
+                    {
+                        freeRtosThreadId = (uint)threadId.ThreadId;
+                        threadId = manager.ManagedCpus[manager.Cpu];
+                    }
                 }
 
                 var type = Operation.ParseType(operation[0]);
@@ -229,7 +250,7 @@ namespace Antmicro.Renode.Extensions.Utilities.GDB.Commands
                         }
                         return false;
                     }
-                    operationsList.Add(new Operation(threadId, type.Value));
+                    operationsList.Add(new Operation(threadId, type.Value, freeRtosThreadId));
                 }
             }
             if(!operationsList.Any())
@@ -296,10 +317,11 @@ namespace Antmicro.Renode.Extensions.Utilities.GDB.Commands
 
         private readonly struct Operation
         {
-            public Operation(PacketThreadId id, OperationType type) : this()
+            public Operation(PacketThreadId id, OperationType type, uint? freeRtosThreadId = null) : this()
             {
                 this.ThreadId = id;
                 this.Type = type;
+                this.FreeRTOSThreadId = freeRtosThreadId;
             }
 
             public static OperationType? ParseType(string str)
@@ -318,6 +340,8 @@ namespace Antmicro.Renode.Extensions.Utilities.GDB.Commands
             public PacketThreadId ThreadId { get; }
 
             public OperationType Type { get; }
+
+            public uint? FreeRTOSThreadId { get; }
         }
 
         private enum OperationType
