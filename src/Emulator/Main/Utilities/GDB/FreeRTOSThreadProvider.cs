@@ -102,6 +102,49 @@ namespace Antmicro.Renode.Utilities.GDB
             return task != null;
         }
 
+        public static bool TryReadSavedGeneralRegister(CommandsManager manager, int registerNumber, out byte[] value)
+        {
+            value = null;
+            if(!manager.SelectedFreeRTOSThreadId.HasValue || registerNumber < 0 || registerNumber > ProgramCounterRegisterNumber
+                || !TryGetTaskByThreadId(manager, (int)manager.SelectedFreeRTOSThreadId.Value, out var task))
+            {
+                return false;
+            }
+
+            // The current task's pxTopOfStack is only refreshed on a context switch.
+            // Its live register values are already available directly from the CPU.
+            if(TryGetCurrentTcb(manager, out var currentTcb) && currentTcb == task.TCBAddress)
+            {
+                return false;
+            }
+
+            if(!TryReadUInt32(manager, task.TCBAddress, out var savedStackPointer))
+            {
+                return false;
+            }
+
+            var stackWord = registerNumber == ProgramCounterRegisterNumber ? SavedMepcWord : (uint)registerNumber;
+            if(!TryReadUInt32(manager, savedStackPointer + stackWord * WordSize, out var registerValue))
+            {
+                return false;
+            }
+
+            // pxPortInitialiseStack leaves the saved x2 slot zero because the
+            // restore routine advances SP past the whole context frame instead.
+            if(registerNumber == StackPointerRegisterNumber && registerValue == 0)
+            {
+                registerValue = savedStackPointer + ContextSizeBytes;
+            }
+
+            value = new byte[WordSize];
+            for(var i = 0; i < value.Length; i++)
+            {
+                var byteIndex = manager.Cpu.Endianness == Endianess.BigEndian ? value.Length - 1 - i : i;
+                value[byteIndex] = (byte)(registerValue >> (i * 8));
+            }
+            return true;
+        }
+
         private static IEnumerable<FreeRTOSTaskInfo> ReadReadyTasks(CommandsManager manager)
         {
             if(!TryGetSymbolAddress(manager, ReadyTasksListsSymbol, out var readyListsAddress))
@@ -324,6 +367,12 @@ namespace Antmicro.Renode.Utilities.GDB
         private const uint ListItemNextOffset = 4;
         private const uint ListItemOwnerOffset = 12;
         private const uint ListSize = 20;
+
+        private const uint WordSize = 4;
+        private const uint ContextSizeBytes = 72 * WordSize;
+        private const uint SavedMepcWord = 65;
+        private const int StackPointerRegisterNumber = 2;
+        private const int ProgramCounterRegisterNumber = 32;
 
         private const int DefaultPriorityCount = 10;
         private const int MaxPriorities = 64;

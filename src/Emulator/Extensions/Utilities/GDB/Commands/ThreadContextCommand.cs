@@ -27,10 +27,18 @@ namespace Antmicro.Renode.Extensions.Utilities.GDB.Commands
                 return PacketData.ErrorReply(Error.OperationNotPermitted);
             }
 
+            if(cpuId == PacketThreadId.Any)
+            {
+                manager.SelectedFreeRTOSThreadId = null;
+                manager.SelectCpuForDebugging(manager.ManagedCpus[PacketThreadId.Any]);
+                return PacketData.Success;
+            }
+
             // FreeRTOS tasks all execute on the same CPU. GDB may select one
             // of their task IDs, but that does not change the emulated CPU.
-            if(FreeRTOSThreadProvider.TryGetTaskByThreadId(manager, unchecked((int)cpuId), out _))
+            if(FreeRTOSThreadProvider.TryGetTaskByThreadId(manager, unchecked((int)threadId.ThreadId), out _))
             {
+                manager.SelectedFreeRTOSThreadId = (uint)threadId.ThreadId;
                 return PacketData.Success;
             }
 
@@ -39,6 +47,7 @@ namespace Antmicro.Renode.Extensions.Utilities.GDB.Commands
                 return PacketData.ErrorReply();
             }
 
+            manager.SelectedFreeRTOSThreadId = null;
             manager.SelectCpuForDebugging(manager.ManagedCpus[cpuId]);
             return PacketData.Success;
         }

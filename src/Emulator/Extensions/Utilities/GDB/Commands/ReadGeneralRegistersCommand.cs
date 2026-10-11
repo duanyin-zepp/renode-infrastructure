@@ -22,8 +22,10 @@ namespace Antmicro.Renode.Utilities.GDB.Commands
             foreach(var i in manager.Cpu.GetAllRegisters().Where(x => x.IsGeneral))
             {
                 var start = registers.Length;
-                var value = manager.Cpu.GetRegister(i.Index);
-                foreach(var b in value.GetBytes(manager.Cpu.Endianness))
+                var valueBytes = FreeRTOSThreadProvider.TryReadSavedGeneralRegister(manager, i.Index, out var savedValue)
+                    ? savedValue
+                    : manager.Cpu.GetRegister(i.Index).GetBytes(manager.Cpu.Endianness);
+                foreach(var b in valueBytes)
                 {
                     registers.AppendFormat("{0:x2}", b);
                 }

@@ -21,8 +21,16 @@ namespace Antmicro.Renode.Utilities.GDB.Commands
         {
             var content = new StringBuilder();
 
+            if(FreeRTOSThreadProvider.TryReadSavedGeneralRegister(manager, registerNumber, out var savedValue))
+            {
+                foreach(var b in savedValue)
+                {
+                    content.AppendFormat("{0:x2}", b);
+                }
+            }
+
             // if register exists in emulated core return current value of this
-            if(manager.Cpu.GetAllRegisters().Any(x => x.Index == registerNumber))
+            else if(manager.Cpu.GetAllRegisters().Any(x => x.Index == registerNumber))
             {
                 foreach(var b in manager.Cpu.GetRegister(registerNumber).GetBytes(manager.Cpu.Endianness))
                 {

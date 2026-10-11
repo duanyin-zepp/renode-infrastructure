@@ -218,6 +218,7 @@ namespace Antmicro.Renode.Utilities.GDB
         public bool CanAttachCPU { get; set; }
 
         public bool MultiprocessEnabled { get; set; }
+        public uint? SelectedFreeRTOSThreadId { get; set; }
 
         public ICpuSupportingGdb Cpu => selectedCpu;
 
