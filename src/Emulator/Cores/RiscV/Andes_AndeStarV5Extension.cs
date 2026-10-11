@@ -85,7 +85,8 @@ namespace Antmicro.Renode.Peripherals.CPU
             cpu.InstallCustomInstruction("0000111sssssiiiii000ddddd1011011", opc => HandleLEA(opc, 3), "LEA.D");
             cpu.InstallCustomInstruction("-----------------110-----1011011", HandleBNEC, "BNEC");
             cpu.InstallCustomInstruction("-----------------101-----1011011", HandleBEQC, "BEQC");
-            cpu.InstallCustomInstruction("-----------------111-----1011011", HandleBBC, "BBC");
+            cpu.InstallCustomInstruction("-0---------------111-----1011011", HandleBBC, "BBC");
+            cpu.InstallCustomInstruction("-1---------------111-----1011011", HandleBBS, "BBS");
             cpu.InstallCustomInstruction("0-----0----------01------1011011", HandleBFOZ, "BFOZ");
             // Andes' legacy PKBB16 encoding uses opcode 0x7f, which the base
             // RISC-V length decoder interprets as a 96-bit instruction.
@@ -153,9 +154,20 @@ namespace Antmicro.Renode.Peripherals.CPU
 
         private void HandleBBC(ulong opcode)
         {
+            HandleBitBranch(opcode, branchWhenSet: false);
+        }
+
+        private void HandleBBS(ulong opcode)
+        {
+            HandleBitBranch(opcode, branchWhenSet: true);
+        }
+
+        private void HandleBitBranch(ulong opcode, bool branchWhenSet)
+        {
             var rs1 = (int)BitHelper.GetValue(opcode, 15, 5);
             var bit = (int)BitHelper.GetValue(opcode, 20, 5);
-            if((((uint)cpu.GetRegister(rs1).RawValue >> bit) & 1) != 0)
+            var bitIsSet = (((uint)cpu.GetRegister(rs1).RawValue >> bit) & 1) != 0;
+            if(bitIsSet != branchWhenSet)
             {
                 return;
             }
