@@ -40,7 +40,10 @@ namespace Antmicro.Renode.Peripherals.CPU
             // context. Stack bounds are not modeled, so expose the disabled
             // value and accept writes just like the adjacent stack-safety CSR.
             cpu.RegisterCSR((ushort)0x7c7, () => 0x0, value => { });
-            cpu.RegisterCSR((ushort)CustomCSR.MachineCacheControl, () => 0xffffffff, value => { cpu.Log(LogLevel.Warning, "Writing to the Machine Cache Control CSR (0x7ca) is currently not supported"); });
+            // Renode does not model the Andes data cache. Report it as disabled so
+            // firmware uses its cache-independent synchronization path instead of
+            // issuing MCCTLCOMMAND operations that this CPU model cannot execute.
+            cpu.RegisterCSR((ushort)CustomCSR.MachineCacheControl, () => 0x0, value => { });
             cpu.RegisterCSR((ushort)CustomCSR.InstructionCacheAndMemoryConfiguration, () => 0x0, value => { cpu.Log(LogLevel.Warning, "Writing to the Machine Custom read-only CSR (0xfc0) is not supported"); });
             cpu.RegisterCSR((ushort)CustomCSR.DataCacheAndMemoryConfiguration, () => 0x0, value => { cpu.Log(LogLevel.Warning, "Writing to the Machine Custom read-only CSR (0xfc1) is not supported"); });
             // Bit 16 is checked by Zephyr driver to see if CCTL is supported
