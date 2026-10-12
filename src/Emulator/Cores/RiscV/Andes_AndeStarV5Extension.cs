@@ -44,6 +44,9 @@ namespace Antmicro.Renode.Peripherals.CPU
             // firmware uses its cache-independent synchronization path instead of
             // issuing MCCTLCOMMAND operations that this CPU model cannot execute.
             cpu.RegisterCSR((ushort)CustomCSR.MachineCacheControl, () => 0x0, value => { });
+            // Some ZeppOS paths still issue a cache maintenance command directly.
+            // With no modeled data cache, accept the command as a no-op.
+            cpu.RegisterCSR((ushort)CustomCSR.MachineCacheControlCommand, () => 0x0, value => { });
             cpu.RegisterCSR((ushort)CustomCSR.InstructionCacheAndMemoryConfiguration, () => 0x0, value => { cpu.Log(LogLevel.Warning, "Writing to the Machine Custom read-only CSR (0xfc0) is not supported"); });
             cpu.RegisterCSR((ushort)CustomCSR.DataCacheAndMemoryConfiguration, () => 0x0, value => { cpu.Log(LogLevel.Warning, "Writing to the Machine Custom read-only CSR (0xfc1) is not supported"); });
             // Bit 16 advertises CCTL support to Zephyr. Since data-cache
@@ -373,6 +376,7 @@ namespace Antmicro.Renode.Peripherals.CPU
         private enum CustomCSR : ulong
         {
             MachineCacheControl = 0x7ca,
+            MachineCacheControlCommand = 0x7cc,
             MachineExtendedStatus = 0x7c4,
             MachineMiscellaneousControl = 0x7d0,
             InstructionCacheAndMemoryConfiguration = 0xfc0,
