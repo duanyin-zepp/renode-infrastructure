@@ -30,7 +30,7 @@ namespace Antmicro.Renode.Extensions.Utilities.GDB.Commands
         public PacketData GetNextThreadInfo()
         {
             var threadIds = GetThreadIds();
-            
+
             if(currentThreadIndex >= threadIds.Count)
             {
                 return new PacketData("l");
